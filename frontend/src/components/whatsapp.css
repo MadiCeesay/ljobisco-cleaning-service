@@ -1,0 +1,7 @@
+.whatsapp-action { min-width: 0; max-width: 100%; margin: 12px 0; }
+.whatsapp-action .button { max-width: 100%; white-space: normal; }
+.whatsapp-action .form-hint { max-width: 52ch; margin: 8px 0; }
+.booking-detail-card .text-link { overflow-wrap: anywhere; }
+.button-whatsapp { background: #0c7137; color: #fff; border: 1px solid #0c7137; gap: 10px; }
+.button-whatsapp:hover { background: #0c7137; color: #fff; }
+.button-whatsapp svg { flex-shrink: 0; }

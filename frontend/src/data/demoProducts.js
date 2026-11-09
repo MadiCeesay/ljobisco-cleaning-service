@@ -1,0 +1,6 @@
+export const demoProducts = [
+  { id: 'demo-spray', slug: 'demo-spray-bottle', name: 'Demo Spray Bottle', category: 'Tools', price: 120, stock: 8, images: ['/images/demo/spray.svg', '/images/demo/supplies.svg'], description: 'An illustrative refillable spray bottle for testing the storefront. This is sample data, not an Ijobisco product or offer.' },
+  { id: 'demo-cloths', slug: 'demo-cleaning-cloths', name: 'Demo Cleaning Cloths', category: 'Accessories', price: 180, stock: 5, images: ['/images/demo/cloths.svg'], description: 'Illustrative cleaning cloths for testing product details and cart quantities. Specifications, price and availability are demo values only.' },
+  { id: 'demo-brush', slug: 'demo-scrubbing-brush', name: 'Demo Scrubbing Brush', category: 'Tools', price: 95, stock: 0, images: ['/images/demo/brush.svg'], description: 'A sample scrubbing brush demonstrating the out-of-stock state. This item cannot be purchased.' },
+  { id: 'demo-kit', slug: 'demo-cleaning-kit', name: 'Demo Cleaning Kit', category: 'Accessories', price: 350, stock: 3, images: ['/images/demo/supplies.svg', '/images/demo/spray.svg'], description: 'An illustrative collection of cleaning tools for interface testing. This does not represent a real Ijobisco bundle.' },
+];
