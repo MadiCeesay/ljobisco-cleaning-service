@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { serviceSchema, productSchema, settingsSchema, scheduleSchema, imageError, filterRecords, safeImageUrl, validateBookingTransition, validateOrderTransition } from './rules.js';
+import { bookingActionStage, serviceSchema, productSchema, settingsSchema, scheduleSchema, imageError, filterRecords, safeImageUrl, validateBookingTransition, validateOrderTransition } from './rules.js';
 import { assertAdministrator, snapshot, mutate } from './demoAdapter.js';
 import { resetDemo, createDemoPhotoPreviews, createBooking, getRawBookings } from '../customer/demoAdapter.js';
 import { respond } from '../quotations/demoAdapter.js';
@@ -9,6 +9,21 @@ import { defaultSettings } from './demoCatalog.js';
 
 const admin = { id: 'demo-admin', role: 'ADMIN' };
 const customer = { id: 'demo-customer', role: 'CUSTOMER' };
+
+test('booking review exposes only stage-appropriate actions without inferring payment eligibility', () => {
+  const booking = { id: 'test-booking', status: 'Submitted' };
+  assert.deepEqual(bookingActionStage(booking, [], []), { stage: 'review', canQuote: true, quote: undefined });
+  const quote = { id: 'quote', bookingId: booking.id, version: 1, status: 'Accepted' };
+  assert.equal(bookingActionStage({ ...booking, status: 'Accepted' }, [quote], [{ bookingId: booking.id, paid: 5000 }]).stage, 'payment');
+  assert.equal(bookingActionStage({ ...booking, status: 'Accepted' }, [quote], [{ bookingId: booking.id, canSchedule: true }]).stage, 'schedule');
+  assert.equal(bookingActionStage({ ...booking, status: 'Scheduled' }, [quote], []).stage, 'start');
+  assert.equal(bookingActionStage({ ...booking, status: 'In Progress' }, [quote], []).stage, 'complete');
+  for (const status of ['Completed', 'Cancelled']) {
+    const action = bookingActionStage({ ...booking, status }, [quote], []);
+    assert.equal(action.stage, 'closed');
+    assert.equal(action.canQuote, false);
+  }
+});
 test('catalogue validation covers slugs, money, stock and bounded image types', () => {
   assert.equal(serviceSchema.safeParse({ name: 'Test Service', slug: 'test-service', description: 'Sample service description', overview: '', enabled: true }).success, true);
   assert.equal(productSchema.safeParse({ name: 'Test Product', slug: 'test-product', description: 'Sample product description', category: 'Tools', price: '12.50', stock: '3', enabled: true }).success, true);

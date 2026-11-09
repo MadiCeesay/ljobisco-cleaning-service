@@ -6,6 +6,17 @@ const decimal = z.string().regex(/^\d+(?:\.\d{1,2})?$/, 'Enter a non-negative am
 export const serviceSchema = z.object({ name: text(2, 120), slug, description: text(10), overview: z.string().trim().max(4000), enabled: z.boolean() });
 export const productSchema = z.object({ name: text(2, 120), slug, description: text(10), category: text(2, 80), price: decimal, stock: z.string().regex(/^\d+$/, 'Enter a whole stock quantity.').refine(value => Number(value) <= 1000000, 'Stock quantity is too large.'), enabled: z.boolean() });
 export const informationSchema = z.object({ message: text(10, 2000) });
+export function bookingActionStage(booking, quotes, balances) {
+  const quote = quotes.filter(item => item.bookingId === booking.id).sort((first, second) => second.version - first.version)[0];
+  const balance = balances.find(item => item.bookingId === booking.id);
+  const canQuote = ['Submitted', 'Under Review', 'Awaiting Information', 'Quoted'].includes(booking.status) && quote?.status !== 'Accepted';
+  let stage = 'review';
+  if (['Completed', 'Cancelled'].includes(booking.status)) stage = 'closed';
+  else if (booking.status === 'Scheduled') stage = 'start';
+  else if (booking.status === 'In Progress') stage = 'complete';
+  else if (quote?.status === 'Accepted') stage = balance?.canSchedule === true ? 'schedule' : 'payment';
+  return { stage, canQuote, quote };
+}
 export const scheduleSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a scheduling date.').refine(value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value, 'Choose a valid date.'), time: text(2, 120), status: z.enum(['Scheduled', 'In Progress', 'Completed', 'Cancelled']), note: text(5, 1000) });
 export const settingsSchema = z.object({ companyName: text(2, 160), tagline: z.string().trim().max(160), email: z.union([z.literal(''), z.email()]), phone: z.string().trim().max(40).refine(value => !value || /^[+\d ()-]{7,40}$/.test(value), 'Enter a valid business phone number or leave blank.'), whatsappNumber: z.string().trim().max(40).transform(value => value.replace(/[ ()-]/g, '')).refine(value => !value || /^\+[1-9]\d{7,14}$/.test(value), 'Use + followed by country code and number, or leave blank.').default(''), address: z.string().trim().max(500), serviceAreas: z.string().trim().max(2000), depositPercentage: z.string().refine(value => /^\d+(?:\.\d{1,2})?$/.test(value) && Number(value) > 0 && Number(value) <= 100, 'Use a percentage above 0 and at most 100.'), deliveryEnabled: z.boolean(), deliveryAreas: z.string().trim().max(2000), deliveryFee: z.union([z.literal(''), decimal]), pickupEnabled: z.boolean(), pickupLocation: z.string().trim().max(500), pickupInstructions: z.string().trim().max(1000) }).superRefine((values, context) => {
   if (values.deliveryEnabled && values.deliveryAreas.length < 2) context.addIssue({ code: 'custom', path: ['deliveryAreas'], message: 'Specify the configured delivery areas.' });

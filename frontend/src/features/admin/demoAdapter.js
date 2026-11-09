@@ -19,7 +19,7 @@ export async function snapshot(actor) {
   const catalogue = catalogSnapshot();
   const customer = getDemoCustomer();
   const payments = [...commerce.payments.map(payment => ({ ...payment, customerId: customer.id, method: 'Mock gateway — simulated' })), ...commerce.orders.map(order => ({ id: `${order.id}-payment`, orderId: order.id, customerId: order.customerId, amount: order.total, method: 'Mock gateway — simulated', status: order.paymentStatus, createdAt: order.createdAt, simulated: true }))];
-  const balances = data.quotes.filter(quote => quote.status === 'Accepted' && latestQuote(data.quotes, quote.bookingId)?.id === quote.id).map(quote => ({ bookingId: quote.bookingId, customerId: quote.customerId, total: quote.total, paid: commerce.payments.filter(payment => payment.quotationId === quote.id && payment.status === 'Paid').reduce((sum, payment) => sum + payment.amount, 0) })).map(item => ({ ...item, outstanding: Math.max(0, Math.round((item.total - item.paid) * 100) / 100) }));
+  const balances = data.quotes.filter(quote => quote.status === 'Accepted' && latestQuote(data.quotes, quote.bookingId)?.id === quote.id).map(quote => ({ bookingId: quote.bookingId, customerId: quote.customerId, total: quote.total, paid: commerce.payments.filter(payment => payment.quotationId === quote.id && payment.status === 'Paid').reduce((sum, payment) => sum + payment.amount, 0) })).map(item => ({ ...item, outstanding: Math.max(0, Math.round((item.total - item.paid) * 100) / 100), canSchedule: item.paid >= Math.round(item.total * Number(catalogue.settings.depositPercentage || 30)) / 100 }));
   return { ...data, ...catalogue, orders: commerce.orders, payments, balances, customers: [customer] };
 }
 export async function mutate(operation, payload, actor, files = []) {
@@ -43,11 +43,15 @@ export async function mutate(operation, payload, actor, files = []) {
     try { const saved = saveCatalog(payload.kind, payload.id, payload.values, [...payload.images, ...generated], payload.expectedRevision); generated.forEach(url => urls.add(url)); return saved; }
     catch (error) { generated.forEach(url => URL.revokeObjectURL(url)); throw error; }
   }
-  if (operation === 'booking-information' || operation === 'booking-schedule') {
+  if (operation === 'booking-information' || operation === 'booking-schedule' || operation === 'booking-approve') {
     const data = await workspace(actor, getRawBookings());
     if (session !== adminRuntime.generation) throw new Error('The demo session ended.');
     const booking = data.bookings.find(item => item.id === payload.id);
     if (!booking || (booking.revision || 0) !== payload.expectedRevision) throw new Error('This booking changed. Refresh before updating.');
+    if (operation === 'booking-approve') {
+      if (booking.requestApprovedAt || latestQuote(data.quotes, booking.id) || !['Submitted', 'Under Review', 'Awaiting Information'].includes(booking.status)) throw new Error('This request has already been reviewed or changed.');
+      return applyAdminBooking(booking.id, { requestApprovedAt: new Date().toISOString(), status: 'Under Review' }, 'Administrator approved the request for quotation. Price and appointment are not confirmed.', payload.expectedRevision);
+    }
     if (operation === 'booking-information') {
       const values = informationSchema.parse(payload.values);
       if (['Completed', 'Cancelled', 'Scheduled', 'In Progress'].includes(booking.status)) throw new Error('This booking cannot receive an ordinary clarification request.');

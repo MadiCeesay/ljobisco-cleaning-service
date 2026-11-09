@@ -17,12 +17,29 @@ const serviceSchema = z.object({ name: text(2, 120), slug, description: text(10)
 export async function adminWorkspace(user, config) {
   const workspace = await quotationWorkspace(user); const commerce = await commerceAccount(user, config); const configuration = await settings();
   const balances = [];
-  for (const booking of await Booking.find({ acceptedQuoteId: { $exists: true } })) { const quote = await Quotation.findById(booking.acceptedQuoteId); if (quote) balances.push({ bookingId: String(booking._id), customerId: String(booking.customerId), total: quote.totalMinor / 100, paid: booking.paidMinor / 100, outstanding: Math.max(0, quote.totalMinor - booking.paidMinor) / 100 }); }
+  for (const booking of await Booking.find({ acceptedQuoteId: { $exists: true } })) { const quote = await Quotation.findById(booking.acceptedQuoteId); if (quote) balances.push({ bookingId: String(booking._id), customerId: String(booking.customerId), total: quote.totalMinor / 100, paid: booking.paidMinor / 100, outstanding: Math.max(0, quote.totalMinor - booking.paidMinor) / 100, canSchedule: quote.status === 'Accepted' && !['Scheduled', 'In Progress', 'Completed', 'Cancelled'].includes(booking.status) && booking.paidMinor >= depositMinor(quote.totalMinor, booking.depositBasisPoints) }); }
   return { ...workspace, ...commerce, services: (await Service.find()).map(serviceDto), products: (await Product.find()).map(productDto), customers: (await User.find({ role: 'CUSTOMER' })).map(user => ({ id: String(user._id), name: user.name, email: user.email, phone: user.phone, status: user.status, revision: user.authVersion })), balances, settings: configuration.values, settingsRevision: configuration.revision };
 }
 export function adminRoutes(auth, config) {
   const router = Router(); router.use('/admin', auth.requireUser, auth.requireAdmin);
   router.get('/admin/workspace', async (request, response) => response.json(await adminWorkspace(request.user, config)));
+  router.post('/admin/bookings/:id/approve', async (request, response) => {
+    const input = z.object({ id: z.string(), expectedRevision: revision }).strict().parse(request.body);
+    assert(input.id === request.params.id, 422, 'INVALID_ID', 'Record identifier mismatch.');
+    let booking;
+    await transaction(async session => {
+      booking = await Booking.findById(identifier(input.id)).session(session);
+      assert(booking, 404, 'NOT_FOUND', 'Booking not found.');
+      assert(booking.revision === input.expectedRevision && !booking.requestApprovedAt && booking.currentVersion === 0 && ['Submitted', 'Under Review', 'Awaiting Information'].includes(booking.status), 409, 'REQUEST_CHANGED', 'This request has already been reviewed or changed. Refresh before continuing.');
+      booking.requestApprovedAt = new Date();
+      booking.status = 'Under Review';
+      booking.revision++;
+      booking.history.push({ title: 'Administrator approved the request for quotation. Price and appointment are not confirmed.', status: booking.status });
+      await booking.save({ session });
+      await audit(request.user, 'booking.request-approved', booking, session);
+    });
+    response.json({ record: await completeBookingDto(booking) });
+  });
   router.get('/admin/statistics', async (request, response) => { const data = await adminWorkspace(request.user, config); response.json({ requests: data.bookings.length, pendingQuotations: data.quotes.filter(item => item.status === 'Sent').length, activeBookings: data.bookings.filter(item => ['Scheduled', 'In Progress'].includes(item.status)).length, awaitingInformation: data.bookings.filter(item => item.status === 'Awaiting Information').length, outstanding: data.balances.reduce((sum, item) => sum + item.outstanding, 0), orders: data.orders.length, lowStock: data.products.filter(item => item.enabled && item.stock <= 3).length }); });
   router.post('/admin/settings', async (request, response) => {
     const input = z.object({ values: settingsSchema, expectedRevision: revision }).strict().parse(request.body); let saved;

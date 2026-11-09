@@ -119,6 +119,10 @@ Connected mode disables demo adapters even during development. Production additi
 See MASTER_COMPLETION_REPORT.md for actual executed checks and required configuration. Disposable MongoDB browser tests are not authenticated Atlas or real SMTP/Cloudinary/provider certification.
 # Cleaning-only update (November 2026)
 
+Booking review offers Approve Request for unapproved requests without quotations. It calls `POST /admin/bookings/:id/approve` with `{ id, expectedRevision }` through the normal cookie/CSRF adapter after confirmation. Persisted `requestApprovedAt` is displayed as approval for quotation, not customer quotation acceptance. The next action is Create Quotation; historical quoted requests retain revision controls.
+
+Administrator booking review uses `balances[].canSchedule` from `/admin/workspace` to reveal the compact scheduling form only after confirmed required payment. Missing eligibility fails closed. Start/completion actions use the existing schedule endpoint with the recorded appointment, expected revision and explicit audit note. Quotation links may supply `?booking=<id>` to preselect an eligible booking; this does not issue or accept a quotation.
+
 Property type is no longer collected in the cleaning request form. `propertyType` may be omitted or empty; the backend stores no inferred property category. Historical enum values remain accepted for compatibility.
 
 The active website no longer exposes shop, cart, checkout or product-order routes; legacy URLs redirect to `/services`. Historical commerce API records are retained, not deleted.

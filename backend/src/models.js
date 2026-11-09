@@ -20,7 +20,7 @@ export const AccountToken = model('AccountToken', {
 const history = new Schema({ title: String, status: String, at: { type: Date, default: Date.now } }, { _id: false });
 export const Booking = model('Booking', {
   customerId: { type: Schema.Types.ObjectId, required: true, index: true }, requestId: String,
-  reference: { type: String, unique: true }, contactPhone: String, service: String, propertyType: String, size: String, rooms: String, requirements: String,
+  reference: { type: String, unique: true }, requestApprovedAt: Date, contactPhone: String, service: String, propertyType: String, size: String, rooms: String, requirements: String,
   address: String, town: String, directions: String, date: String, time: String, description: String,
   status: { type: String, enum: ['Submitted', 'Under Review', 'Awaiting Information', 'Quoted', 'Accepted', 'Awaiting Payment', 'Scheduled', 'In Progress', 'Completed', 'Cancelled'], default: 'Submitted' },
   photos: [{ type: Schema.Types.ObjectId, ref: 'Upload' }], revision: { type: Number, default: 0 }, currentVersion: { type: Number, default: 0 },

@@ -1,4 +1,5 @@
 const identifier = value => encodeURIComponent(String(value));
+export const approveBookingEndpoint = id => `/admin/bookings/${identifier(id)}/approve`;
 export const endpoints = Object.freeze({
   auth: { csrf: '/auth/csrf', session: '/auth/session', login: '/auth/login', logout: '/auth/logout', register: '/auth/register', 'forgot-password': '/auth/forgot-password', 'reset-password': '/auth/reset-password', 'verify-email': '/auth/verify-email' },
   customer: { overview: '/customer/overview', profile: '/customer/profile', quotations: '/customer/quotations/workspace', commerce: '/customer/payments-and-orders' },

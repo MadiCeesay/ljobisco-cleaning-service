@@ -6,8 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ClipboardList, FileCheck2, CalendarClock, MessageSquare, CreditCard } from 'lucide-react';
 import { useAdmin } from './AdminLayout';
 import { AdminHeading, Table, Filter, StatusBadge, EmptyState, CustomerName, AuditHistory, useConfirmation } from './components';
-import { filterRecords, informationSchema, scheduleSchema, safeImageUrl, orderUpdateSchema, orderStatuses } from './rules';
-import { bookingStates } from '../customer/validation';
+import { filterRecords, bookingActionStage, scheduleSchema, safeImageUrl, orderUpdateSchema, orderStatuses } from './rules';
+import { bookingStates, localDate } from '../customer/validation';
 import { CustomerField } from '../customer/AccountPages';
 import { AdminQuotationsPage } from '../quotations/AdminQuotationEditor';
 import { MessagingPage } from '../quotations/MessagingPage';
@@ -47,25 +47,62 @@ export function AdminBookingsPage() {
   const { data, search } = useAdmin();
   const [status, setStatus] = useState('All');
   const records = filterRecords(data.bookings, search, status, ['id', 'service', 'town', 'address', 'propertyType']);
-  return <><AdminHeading title="Cleaning requests" description="Review requirements, request clarification and manage confirmed schedules." /><section className="admin-panel"><Filter status={status} setStatus={setStatus} statuses={bookingStates} count={records.length} /><Table caption="Cleaning requests" columns={bookingColumns(data)} records={records} /></section></>;
+  return <><AdminHeading title="Cleaning requests" description="Review cleaning requests, contact customers and prepare quotations." /><section className="admin-panel"><Filter status={status} setStatus={setStatus} statuses={bookingStates} count={records.length} /><Table caption="Cleaning requests" columns={bookingColumns(data)} records={records} /></section></>;
 }
 function BookingActions({ booking }) {
-  const { mutate } = useAdmin();
+  const { data, mutate } = useAdmin();
   const [feedback, setFeedback] = useState('');
   const confirmation = useConfirmation();
-  const information = useForm({ resolver: zodResolver(informationSchema), defaultValues: { message: '' } });
-  const scheduling = useForm({ resolver: zodResolver(scheduleSchema), defaultValues: { date: booking.scheduledDate || '', time: booking.scheduledTime || '', status: booking.status === 'Scheduled' ? 'In Progress' : booking.status === 'In Progress' ? 'Completed' : 'Scheduled', note: '' } });
-  const closed = ['Completed', 'Cancelled'].includes(booking.status);
-  const submit = (operation, values, title) => confirmation.confirm({ title, description: `${booking.id}\n${operation === 'booking-information' ? values.message : `${values.status} · ${values.date} · ${values.time}\n${values.note}`}\nThis change must be confirmed by the administrator service.`, onConfirm: async () => { await mutate(operation, { id: booking.id, values, expectedRevision: booking.revision || 0 }); setFeedback('The administrator adapter confirmed the change.'); information.reset(); } });
-  return <><div className="admin-two-column equal"><section className="admin-panel"><h2>Request additional information</h2><p className="admin-info-note">Ask for clarification or more photographs in the booking record, then contact the customer through WhatsApp. An on-site inspection is not mandatory for every quotation.</p><form noValidate onSubmit={information.handleSubmit(values => submit('booking-information', values, 'Send information request?'))}><fieldset className="customer-fieldset" disabled={closed || ['Scheduled', 'In Progress'].includes(booking.status)}><CustomerField name="message" label="Information needed" type="textarea" register={information.register} errors={information.formState.errors} /><button className="button button-outline" type="submit">Review Information Request</button></fieldset></form><p><BookingWhatsApp booking={booking} /></p></section><section className="admin-panel"><h2>Scheduling and progress</h2><p className="admin-info-note">Preferred dates are requests, not guaranteed appointments. Only the adapter/backend can confirm scheduling and completion.</p><form noValidate onSubmit={scheduling.handleSubmit(values => submit('booking-schedule', values, 'Update booking schedule?'))}><fieldset className="customer-fieldset" disabled={closed}><div className="admin-form-grid"><CustomerField name="date" label="Confirmed scheduling date" type="date" register={scheduling.register} errors={scheduling.formState.errors} /><CustomerField name="time" label="Confirmed time window" register={scheduling.register} errors={scheduling.formState.errors} /><CustomerField name="status" label="Booking update" register={scheduling.register} errors={scheduling.formState.errors}>{['Scheduled', 'In Progress', 'Completed', 'Cancelled'].map(status => <option key={status}>{status}</option>)}</CustomerField><CustomerField name="note" label="Change reason" type="textarea" register={scheduling.register} errors={scheduling.formState.errors} /></div><button type="submit" className="button button-primary admin-form-actions">Review Schedule Change</button></fieldset></form></section></div>{closed && <p className="admin-info-note">This booking is closed. Further changes require a separately authorized backend workflow.</p>}<p role="status" className="admin-info-note">{feedback}</p>{confirmation.dialog}</>;
+  const action = bookingActionStage(booking, data.quotes, data.balances);
+  const scheduling = useForm({ resolver: zodResolver(scheduleSchema), defaultValues: { date: booking.scheduledDate || '', time: booking.scheduledTime || '', status: 'Scheduled', note: 'Administrator confirmed the cleaning schedule.' } });
+  function update(values, title) {
+    confirmation.confirm({
+      title,
+      description: `${booking.reference || booking.id}\n${values.date} · ${values.time}\n${values.note}`,
+      onConfirm: async () => {
+        await mutate('booking-schedule', { id: booking.id, values, expectedRevision: booking.revision || 0 });
+        setFeedback('Booking updated.');
+      },
+    });
+  }
+  function progress(status) {
+    update({ date: booking.scheduledDate, time: booking.scheduledTime, status, note: status === 'In Progress' ? 'Administrator confirmed cleaning has started.' : 'Administrator confirmed cleaning is complete.' }, status === 'In Progress' ? 'Start this cleaning?' : 'Mark this cleaning complete?');
+  }
+  function approve() {
+    confirmation.confirm({
+      title: 'Approve this request?',
+      description: 'Approve the cleaning request for quotation. This does not accept a quotation, charge the customer or confirm an appointment.',
+      onConfirm: async () => {
+        await mutate('booking-approve', { id: booking.id, expectedRevision: booking.revision || 0 });
+        setFeedback('Request approved for quotation.');
+      },
+    });
+  }
+  return <section className="admin-panel">
+    <h2>Next step</h2>
+    <div className="booking-review-actions">
+      {!booking.requestApprovedAt && !action.quote && ['Submitted', 'Under Review', 'Awaiting Information'].includes(booking.status) && <button type="button" className="button button-primary" onClick={approve}>Approve Request</button>}
+      {action.stage !== 'closed' && <BookingWhatsApp booking={booking} />}
+      {action.canQuote && (booking.requestApprovedAt || action.quote) && <Link className="button button-primary" to={`/admin/quotations?booking=${encodeURIComponent(booking.id)}`}>{action.quote ? 'Revise Quotation' : 'Create Quotation'}</Link>}
+      {action.quote && <Link className="text-link" to={`/admin/quotations/${action.quote.id}`}>View Quotation</Link>}
+      {action.stage === 'start' && <button type="button" className="button button-primary" onClick={() => progress('In Progress')}>Start Cleaning</button>}
+      {action.stage === 'complete' && <button type="button" className="button button-primary" onClick={() => progress('Completed')}>Mark Cleaning Complete</button>}
+    </div>
+    {booking.requestApprovedAt && <p className="form-hint"><strong>Request approved for quotation.</strong> Approval does not confirm a price or appointment.</p>}
+    {action.stage === 'review' && <p className="form-hint">Review the requirements, discuss any questions on WhatsApp, then send an official quotation.</p>}
+    {action.stage === 'payment' && <p className="form-hint">The quotation is accepted. Scheduling becomes available after the required payment is confirmed.</p>}
+    {action.stage === 'closed' && <p className="form-hint">This booking is {booking.status.toLowerCase()}. Its history remains available below.</p>}
+    {action.stage === 'schedule' && <details className="booking-schedule-disclosure"><summary>Set cleaning date</summary><form noValidate onSubmit={scheduling.handleSubmit(values => update(values, 'Confirm cleaning appointment?'))}><div className="admin-form-grid"><CustomerField name="date" label="Cleaning date" type="date" min={localDate()} register={scheduling.register} errors={scheduling.formState.errors} /><CustomerField name="time" label="Time or time window" register={scheduling.register} errors={scheduling.formState.errors} hint="For example, 9:00–11:00." /></div><button className="button button-primary" type="submit">Confirm Schedule</button></form></details>}
+    <p role="status" className="admin-info-note">{feedback}</p>{confirmation.dialog}
+  </section>;
 }
 export function AdminBookingDetails() {
   const { id } = useParams();
   const { data } = useAdmin();
   const booking = data.bookings.find(item => item.id === id);
   if (!booking) return <EmptyState title="Booking not found.">The request is unavailable in this workspace.</EmptyState>;
-  const details = [['Customer', <CustomerName id={booking.customerId} />], ['Contact phone', booking.contactPhone || data.customers.find(customer => customer.id === booking.customerId)?.phone || 'Not supplied'], ['Status', <StatusBadge status={booking.status} />], ['Property', `${booking.propertyType} · ${booking.rooms} rooms / areas`], ['Approximate size', booking.size ? `${booking.size} m²` : 'Not provided'], ['Address', `${booking.address}, ${booking.town}`], ['Access and directions', booking.directions || 'Not provided'], ['Preferred date', booking.date || 'Not provided'], ['Preferred time', booking.time || 'Not provided'], ['Confirmed schedule', booking.scheduledDate ? `${booking.scheduledDate} · ${booking.scheduledTime}` : 'Not scheduled'], ['Cleaning description', booking.description], ['Special requirements', booking.requirements || 'Not provided'], ['Additional information request', booking.clarification || 'None']];
-  return <><Link className="text-link" to="/admin/bookings">Back to Requests</Link><AdminHeading title={bookingTitle(booking, data)} description={`Booking reference: ${booking.reference || booking.id}`} /><section className="admin-panel"><h2>Customer-submitted details</h2><dl className="admin-details">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><h3>Property photographs</h3>{booking.photos?.length ? <div className="admin-image-grid">{booking.photos.map((photo, index) => (safeImageUrl(photo.url) && photo.uploaded !== false) || safeImageUrl(photo.previewUrl) ? <a key={index} className="admin-image-tile" href={safeImageUrl(photo.previewUrl || photo.url)} target="_blank" rel="noreferrer"><img src={safeImageUrl(photo.previewUrl || photo.url)} alt={photo.name || `Property photograph ${index + 1}`} /><span>{photo.name || `Photograph ${index + 1}`}{photo.uploaded === false ? ' · Local preview only, not uploaded' : ''}</span></a> : <div className="admin-image-tile" key={index}><span>{photo.name || `Photograph ${index + 1}`} — not uploaded; preview unavailable.</span></div>)}</div> : <p className="admin-info-note">No photographs supplied.</p>}<p><Link className="text-link" to="/admin/quotations">Manage Formal Quotations</Link></p></section><BookingActions key={`${booking.id}-${booking.revision || 0}`} booking={booking} /><section className="admin-panel"><h2>Booking history</h2><AuditHistory items={[{ title: 'Cleaning request submitted', at: booking.createdAt }, ...(booking.history || [])]} /></section></>;
+  const details = [['Customer', <CustomerName id={booking.customerId} />], ['Contact phone', booking.contactPhone || data.customers.find(customer => customer.id === booking.customerId)?.phone || 'Not supplied'], ['Status', <StatusBadge status={booking.status} />], ['Address', `${booking.address}, ${booking.town}`], ['Cleaning needed', booking.description], ['Preferred date', booking.date || 'To be discussed'], ['Confirmed appointment', booking.scheduledDate ? `${booking.scheduledDate} · ${booking.scheduledTime || ''}` : 'Not scheduled'], ...(booking.rooms ? [['Rooms / areas', booking.rooms]] : []), ...(booking.requirements ? [['Special requirements', booking.requirements]] : []), ...(booking.directions ? [['Directions', booking.directions]] : [])];
+  return <><Link className="text-link" to="/admin/bookings">Back to Requests</Link><AdminHeading title={bookingTitle(booking, data)} description={`Booking reference: ${booking.reference || booking.id}`} /><section className="admin-panel"><h2>Customer-submitted details</h2><dl className="admin-details">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><h3>Property photographs</h3>{booking.photos?.length ? <div className="admin-image-grid">{booking.photos.map((photo, index) => (safeImageUrl(photo.url) && photo.uploaded !== false) || safeImageUrl(photo.previewUrl) ? <a key={index} className="admin-image-tile" href={safeImageUrl(photo.previewUrl || photo.url)} target="_blank" rel="noreferrer"><img src={safeImageUrl(photo.previewUrl || photo.url)} alt={photo.name || `Property photograph ${index + 1}`} /><span>{photo.name || `Photograph ${index + 1}`}{photo.uploaded === false ? ' · Local preview only, not uploaded' : ''}</span></a> : <div className="admin-image-tile" key={index}><span>{photo.name || `Photograph ${index + 1}`} — not uploaded; preview unavailable.</span></div>)}</div> : <p className="admin-info-note">No photographs supplied.</p>}</section><BookingActions key={`${booking.id}-${booking.revision || 0}`} booking={booking} /><details className="admin-panel booking-history-disclosure"><summary>Booking history</summary><AuditHistory items={[{ title: 'Cleaning request submitted', at: booking.createdAt }, ...(booking.history || [])]} /></details></>;
 }
 export function AdminQuotationWorkspace() { const { search } = useAdmin(); return <AdminQuotationsPage search={search} />; }
 export function AdminConversationWorkspace() { const { search } = useAdmin(); return <MessagingPage search={search} />; }

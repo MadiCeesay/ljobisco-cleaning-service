@@ -6,3 +6,10 @@
 @media(max-width:650px){.admin-content{padding:20px 16px 35px}.admin-topbar{padding:15px 16px;gap:8px}.admin-topbar>div{gap:9px}.admin-topbar .admin-environment{font-size:.6rem;padding:6px 8px}.admin-topbar-actions{gap:8px}.admin-utility{flex-wrap:wrap;gap:12px}.admin-global-search{width:100%}.admin-utility>.button{margin-left:auto}.admin-heading{align-items:start;flex-direction:column;gap:14px}.admin-heading h1{font-size:1.7rem}.admin-metrics{gap:11px}.admin-metric{padding:16px}.admin-metric-top{font-size:.7rem;align-items:start}.admin-metric-top svg{width:15px;height:15px;padding:5px}.admin-metric strong{font-size:1.6rem}.admin-panel{padding:18px}.admin-form-grid,.admin-details,.admin-two-column.equal{grid-template-columns:1fr}.admin-filters{flex-wrap:wrap;gap:10px}.admin-filters .field{flex:1}.admin-result-count{width:100%}.admin-shell .messaging-layout{grid-template-columns:minmax(0,1fr)}.admin-shell .conversation-list{display:none}.admin-shell .mobile-conversation-select{display:block}.admin-modal{padding:22px}.admin-form-full{grid-column:auto}.admin-topbar>div>span{font-size:.72rem}.admin-panel-title{flex-wrap:wrap}.admin-image-tile{width:110px}}
 @media(prefers-reduced-motion:reduce){.admin-spinning{animation:none}.admin-sidebar{transition:none}}
 @media(max-width:900px){.admin-sidebar{visibility:hidden}.admin-sidebar.is-open{visibility:visible}}
+.booking-review-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
+.booking-review-actions .whatsapp-action { margin: 0; }
+.booking-review-actions .whatsapp-action .form-hint { max-width: 40ch; }
+.booking-schedule-disclosure, .booking-history-disclosure { margin-top: 20px; }
+.booking-schedule-disclosure summary, .booking-history-disclosure summary { cursor: pointer; font-weight: 600; color: #073b91; padding: 8px 0; }
+.booking-schedule-disclosure form { max-width: 700px; margin-top: 16px; }
+.booking-history-disclosure summary { font-size: 18px; }

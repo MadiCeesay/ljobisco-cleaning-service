@@ -1,6 +1,6 @@
 import { demoAvailable } from '../../services/demoMode';
 import { useState } from 'react';
-import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, ArrowRight } from 'lucide-react';
@@ -35,12 +35,12 @@ export function AdministratorAccess() {
 }
 
 const initialValues = { bookingId: '', items: [{ description: '', quantity: '1', unitPrice: '' }], notes: '', expiresAt: '' };
-export function AdminQuotationForm({ bookings, quotes, onIssue }) {
+export function AdminQuotationForm({ bookings, quotes, onIssue, initialBookingId = '' }) {
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
-  const { control, register, handleSubmit, watch, reset, formState: { errors } } = useForm({ resolver: zodResolver(quotationEditorSchema), defaultValues: initialValues });
+  const { control, register, handleSubmit, watch, reset, formState: { errors } } = useForm({ resolver: zodResolver(quotationEditorSchema), defaultValues: { ...initialValues, bookingId: initialBookingId } });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const values = watch();
   const amounts = previewAmounts(values.items);
@@ -55,10 +55,11 @@ export function AdminQuotationForm({ bookings, quotes, onIssue }) {
 }
 
 export function AdminQuotationsPage({ search = '' }) {
+  const [params] = useSearchParams();
   const workspace = useWorkspace();
   const [filter, setFilter] = useState('All');
   const filtered = workspace.quotes.filter(quote => (filter === 'All' || displayStatus(quote) === filter) && `${quote.bookingId} ${quote.version} ${quote.status}`.toLowerCase().includes(search.toLowerCase()));
   const eligible = workspace.bookings.filter(booking => ['Submitted', 'Under Review', 'Awaiting Information', 'Quoted'].includes(booking.status) && latestQuote(workspace.quotes, booking.id)?.status !== 'Accepted');
   async function onIssue(values, expectedVersion) { const quote = await issueQuotation(values, expectedVersion, workspace.demo, workspace.user); workspace.refresh(); return quote; }
-  return <><div className="customer-page-heading"><div><span className="eyebrow">ADMINISTRATOR QUOTATIONS</span><h1>Clear scope. Official offers.</h1><p>Create the first quotation or issue a new numbered revision after negotiation.</p></div></div><WorkspaceState workspace={workspace}>{eligible.length ? <AdminQuotationForm bookings={eligible} quotes={workspace.quotes} onIssue={onIssue} /> : <div className="dashboard-empty"><h2>No eligible bookings.</h2><p>Accepted or closed requests cannot receive an ordinary revision.</p></div>}<section className="admin-history-list"><h2>Issued quotations</h2><div className="field"><label htmlFor="quotation-status-filter">Quotation status</label><select id="quotation-status-filter" value={filter} onChange={event => setFilter(event.target.value)}>{['All', 'Sent', 'Accepted', 'Declined', 'Expired', 'Superseded'].map(status => <option key={status}>{status}</option>)}</select></div>{!filtered.length && <p className="admin-info-note">No quotations match your search or filter.</p>}{filtered.map(quote => <Link className="quotation-list-row" key={quote.id} to={`/admin/quotations/${quote.id}`}><div><strong>{quote.bookingId}</strong><span>Version {quote.version}</span></div><strong>{formatPrice(quote.total)}</strong><QuoteStatus quote={quote} /></Link>)}</section></WorkspaceState></>;
+  return <><div className="customer-page-heading"><div><span className="eyebrow">ADMINISTRATOR QUOTATIONS</span><h1>Clear scope. Official offers.</h1><p>Create the first quotation or issue a new numbered revision after negotiation.</p></div></div><WorkspaceState workspace={workspace}>{eligible.length ? <AdminQuotationForm key={params.get('booking') || 'all'} bookings={eligible} quotes={workspace.quotes} onIssue={onIssue} initialBookingId={eligible.find(booking => booking.id === params.get('booking'))?.id || ''} /> : <div className="dashboard-empty"><h2>No eligible bookings.</h2><p>Accepted or closed requests cannot receive an ordinary revision.</p></div>}<section className="admin-history-list"><h2>Issued quotations</h2><div className="field"><label htmlFor="quotation-status-filter">Quotation status</label><select id="quotation-status-filter" value={filter} onChange={event => setFilter(event.target.value)}>{['All', 'Sent', 'Accepted', 'Declined', 'Expired', 'Superseded'].map(status => <option key={status}>{status}</option>)}</select></div>{!filtered.length && <p className="admin-info-note">No quotations match your search or filter.</p>}{filtered.map(quote => <Link className="quotation-list-row" key={quote.id} to={`/admin/quotations/${quote.id}`}><div><strong>{quote.bookingId}</strong><span>Version {quote.version}</span></div><strong>{formatPrice(quote.total)}</strong><QuoteStatus quote={quote} /></Link>)}</section></WorkspaceState></>;
 }

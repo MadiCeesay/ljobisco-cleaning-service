@@ -1,5 +1,5 @@
 import { apiRequest } from '../../services/apiClient';
-import { endpoints } from '../../services/endpoints';
+import { approveBookingEndpoint, endpoints } from '../../services/endpoints';
 import { uploadImages } from '../../services/uploads';
 import { requireDemo } from '../../services/demoMode';
 
@@ -17,6 +17,7 @@ const operations = {
   settings: () => endpoints.admin.settings,
   catalog: payload => endpoints.admin.catalog(payload.kind, payload.id),
   'booking-information': payload => endpoints.admin.information(payload.id),
+  'booking-approve': payload => approveBookingEndpoint(payload.id),
   'booking-schedule': payload => endpoints.admin.schedule(payload.id),
   'order-status': payload => endpoints.admin.fulfilment(payload.id),
 };
