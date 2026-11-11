@@ -6,11 +6,16 @@ import { createApp } from './app.js';
 import { createRoutes } from './routes.js';
 import { initializeModels } from './models.js';
 import { expireReservations } from './commerce.js';
+import { startupDiagnostic } from './startup-diagnostics.js';
 
+let startupStage = 'environment';
 async function start() {
 const config = loadConfig();
+startupStage = 'database';
 await connectDatabase(config.MONGODB_URI);
+startupStage = 'models';
 await initializeModels();
+startupStage = 'application';
 const { router } = createRoutes(config);
 const server = http.createServer(createApp(config, { routes: router }));
 const reservationSweep = setInterval(() => expireReservations().catch(() => console.error(JSON.stringify({ event: 'reservation-sweep-failed' }))), 60000); reservationSweep.unref();
@@ -25,4 +30,4 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
 }
-start().catch(() => { console.error(JSON.stringify({ event: 'startup-failed', message: 'Check validated environment settings, database connectivity and replica-set configuration. Sensitive diagnostic details are not logged.' })); process.exitCode = 1; });
+start().catch(async error => { console.error(JSON.stringify(startupDiagnostic(startupStage, error))); process.exitCode = 1; await mongoose.disconnect(); });
