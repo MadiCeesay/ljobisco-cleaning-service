@@ -18,7 +18,7 @@ const phone = z.string().trim().regex(/^[+\d ()-]{7,25}$/);
 export const profileSchema = z.object({ name: z.string().trim().min(2).max(100), email, phone: z.union([z.literal(''), phone]).default('') }).strict();
 const neutral = { message: 'If this account is eligible and email delivery is available, instructions may arrive. Delivery is not confirmed.' };
 export function mailer(config) {
-  const enabled = Boolean(config.SMTP_HOST && config.SMTP_FROM);
+  const enabled = Boolean(config.SMTP_HOST && config.SMTP_FROM && !config.frontendPending);
   const transport = enabled ? nodemailer.createTransport({ host: config.SMTP_HOST, port: config.SMTP_PORT, secure: config.SMTP_SECURE, requireTLS: !config.SMTP_SECURE && config.production, ...(config.SMTP_USER ? { auth: { user: config.SMTP_USER, pass: config.SMTP_PASS } } : {}) }) : null;
   async function deliver(message) {
     assert(transport, 503, 'EMAIL_UNAVAILABLE', 'Email delivery requires SMTP configuration.');

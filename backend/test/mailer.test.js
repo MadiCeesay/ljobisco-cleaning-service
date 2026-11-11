@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import nodemailer from 'nodemailer';
 import { mailer } from '../src/auth.js';
 
+test('frontend-pending deployment never sends email links to a backend-only URL', async () => {
+  const service = mailer({ frontendPending: true, SMTP_HOST: 'smtp.example.test', SMTP_FROM: 'sender@example.test', PUBLIC_APP_URL: 'https://isolated-api.onrender.com' });
+  assert.equal(service.available, false);
+  await assert.rejects(service.send('customer@example.test', 'verify', 'test-token'), error => error.code === 'EMAIL_UNAVAILABLE');
+});
+
 test('SMTP failures become safe service-unavailable errors without exposing credentials or provider details', async () => {
   const configuration = { SMTP_HOST: 'smtp.example.test', SMTP_PORT: 587, SMTP_SECURE: false, SMTP_FROM: 'sender@example.test', PUBLIC_APP_URL: 'http://127.0.0.1:5173' };
   const stub = mock.method(nodemailer, 'createTransport', () => ({ async sendMail() { throw Object.assign(new Error('Private provider details and credentials'), { code: 'EDNS' }); } }));

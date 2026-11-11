@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: ijobisco-cleaning-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /ready
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: FRONTEND_PENDING
+        value: "true"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: COOKIE_SAME_SITE
+        value: none
+      - key: MOCK_PAYMENTS_ENABLED
+        value: "false"
+      - key: REQUIRE_EMAIL_VERIFICATION
+        value: "false"
+      - key: SESSION_TTL_HOURS
+        value: "24"
+      - key: MONGODB_URI
+        sync: false

@@ -10,6 +10,7 @@ import { HttpError, errorHandler } from './errors.js';
 export function createApp(config, { routes, logger = entry => console.log(JSON.stringify(entry)), ready = () => mongoose.connection.readyState === 1 } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', config.TRUST_PROXY_HOPS || false);
   app.use((request, response, next) => {
     request.id = randomUUID(); response.set('X-Request-Id', request.id).set('Cache-Control', 'no-store');
     const started = Date.now();
